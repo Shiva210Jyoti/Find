@@ -26,7 +26,7 @@ We use GitHub to host code, to track issues and feature requests, and to accept 
 ### Prerequisites
 
 - **Node.js** (v18+) & **pnpm**
-- **Python** (3.10+) & **pip**
+- **Python** (3.10+) & **uv**
 - **Docker** & **Docker Compose**
 - **PostgreSQL** (with `pgvector` extension)
 - **Redis**
@@ -45,9 +45,8 @@ cd Find
 
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: .\venv\Scripts\activate
-pip install -r requirements.txt
+uv venv
+uv sync
 ```
 
 **Environment Variables:**
@@ -55,12 +54,12 @@ Copy `.env.example` to `.env` and configure your database, Redis, and MinIO cred
 
 **Run the Server:**
 ```bash
-uvicorn app.main:app --reload
+uv run uvicorn find_api.main:app --reload
 ```
 
 **Run the Worker:**
 ```bash
-python -m app.workers.main
+uv run rq worker --url redis://localhost:6379 high default low
 ```
 
 #### 3. Frontend Setup

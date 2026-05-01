@@ -8,6 +8,9 @@
         "noUnusedImports": "error",
         "noUnusedVariables": "error"
       },
+      "suspicious": {
+        "noUnknownAtRules": "off"
+      },
       "style": {
         "noDefaultExport": "off"
       }
@@ -24,6 +27,11 @@
     "indentWidth": 2,
     "lineEnding": "lf",
     "lineWidth": 80
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
   },
   "javascript": {
     "formatter": {

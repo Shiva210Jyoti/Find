@@ -5,7 +5,6 @@ FROM ${BASE_IMAGE}
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-dev \
-    python3-pip \
     build-essential \
     libpq-dev \
     libgl1 \
@@ -24,23 +23,22 @@ RUN if ! command -v python >/dev/null 2>&1; then \
 
 # Install uv and ensure binary directory on PATH
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:/root/.cargo/bin:$PATH"
+ENV PATH="/app/.venv/bin:/root/.local/bin:/root/.cargo/bin:$PATH"
 
 # Set working directory
 WORKDIR /app
 
-# Copy requirements first for better caching
-COPY requirements.txt .
+# Copy project dependency metadata first for better caching
+COPY pyproject.toml .
 
-# Install Python dependencies with uv (CUDA-enabled PyTorch) or regular pip
-RUN if command -v uv >/dev/null 2>&1; then \
-            uv pip install --system --no-cache -r requirements.txt; \
-        else \
-            pip install --no-cache-dir -r requirements.txt; \
-        fi
+# Install Python dependencies with uv
+RUN uv sync --no-dev --no-install-project
 
 # Copy application code
 COPY . .
+
+# Install the local package after source is available.
+RUN uv sync --no-dev
 
 # Create directories for model cache
 RUN mkdir -p /root/.cache/torch/hub/checkpoints \
@@ -51,4 +49,4 @@ RUN mkdir -p /root/.cache/torch/hub/checkpoints \
 EXPOSE 8000
 
 # Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "warning"]
+CMD ["uvicorn", "find_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "warning"]

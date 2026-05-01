@@ -1,12 +1,13 @@
+import logging
 import os
 import sys
+
 from sqlalchemy import create_engine, text
-import logging
 
-# Add app to path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Add the src-layout package to the path when running this script directly.
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 
-from app.core.config import settings  # noqa: E402
+from find_api.core.config import settings  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,10 +35,10 @@ def migrate_db():
                 )
             )
             conn.commit()
-            logger.info("✅ Successfully updated vector column dimension.")
+            logger.info("Successfully updated vector column dimension.")
 
     except Exception as e:
-        logger.error(f"❌ Migration failed: {e}")
+        logger.error(f"Migration failed: {e}")
         sys.exit(1)
 
 

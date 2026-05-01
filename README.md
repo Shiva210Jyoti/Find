@@ -16,7 +16,7 @@ All image processing, vector generation, and search stay inside your local stack
 
 - Frontend: Next.js 16.2, React 19, React Query, Tailwind CSS, Biome
 - Backend: FastAPI, SQLAlchemy, PostgreSQL, pgvector, Redis, RQ, MinIO
-- ML pipeline:
+- ML processing flow:
   - Object detection: YOLOv10
   - Captioning: Florence-2
   - OCR: PaddleOCR
@@ -189,10 +189,8 @@ pnpm dev
 
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+uv sync
+uv run uvicorn find_api.main:app --reload
 ```
 
 ## Database Notes
