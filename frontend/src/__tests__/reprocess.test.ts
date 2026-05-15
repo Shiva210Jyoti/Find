@@ -32,7 +32,9 @@ describe("reprocessImage API function", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     // Make axios.create() return our mock instance so `api` is defined.
-    mockedAxios.create = vi.fn().mockReturnValue(apiInstanceMock as AxiosInstance);
+    mockedAxios.create = vi
+      .fn()
+      .mockReturnValue(apiInstanceMock as AxiosInstance);
   });
 
   it("calls POST /api/image/:id/reprocess and returns the response", async () => {
