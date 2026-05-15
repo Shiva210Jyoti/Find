@@ -19,6 +19,7 @@ def _mock_search(client, fake_rows):
         yield mock_db
 
     app.dependency_overrides[get_db] = _override
+
     try:
         with (
             patch("find_api.routers.search.settings", ML_MODE="mock", EMBEDDING_DIM=768),

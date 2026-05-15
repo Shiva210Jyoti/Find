@@ -29,6 +29,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from find_api.core.database import Base, get_db  # noqa: E402
 from find_api.main import app  # noqa: E402
 
+
 # ---------------------------------------------------------------------------
 # In-memory SQLite engine with StaticPool.
 # StaticPool reuses one connection so the in-memory DB is visible across
@@ -91,7 +92,9 @@ def client(db):
 
     try:
         with (
-            patch("find_api.routers.upload.upload_file", return_value="images/ab/abc.jpg"),
+            patch(
+                "find_api.routers.upload.upload_file", return_value="images/ab/abc.jpg"
+            ),
             patch("find_api.routers.upload.get_task_queue", return_value=fake_queue),
             patch(
                 "find_api.routers.gallery.get_file_url",
