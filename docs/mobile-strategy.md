@@ -142,7 +142,7 @@ Minimum requirements:
 5. **Origin and CORS restrictions** — only allow the specific mobile web origin(s) you expect.
 6. **Least-privilege API exposure** — expose only the Find API, not Redis, PostgreSQL, MinIO, or worker internals.
 7. **Rate limiting and request size limits** — protect upload and search endpoints from accidental abuse.
-8. **Device-safe storage** — store refresh tokens in secure storage when a native shell is introduced. In the PWA, `localStorage` holds only the connection profile (host, port, and a short-lived session token) — never a long-lived secret or pairing token.
+8. **Device-safe storage** — store refresh tokens in secure storage when a native shell is introduced. A PWA must not keep bearer or session secrets in `localStorage`; use HttpOnly, Secure, SameSite cookies or in-memory session handling instead. Client-side storage should keep only non-secret connection metadata such as host and port.
 9. **User-visible trust model** — show which backend the phone is connected to, so users know whether they are using a laptop, home server, or remote instance.
 
 ## 7. What this means for the roadmap
@@ -152,7 +152,7 @@ The mobile roadmap should be staged as follows:
 1. **Stage 1: PWA mobile web app**
    - Responsive UI — the existing frontend already has a gallery and search page; the first sub-task is adapting layouts with mobile-first CSS (stacked cards, bottom nav, touch-friendly hit targets). This reuses existing components and can ship independently of the pairing/auth work.
    - Installable app shell — use `@serwist/next` (actively maintained, Next.js 16 compatible) for service worker generation, precaching, and runtime caching. Configure a `manifest.json` with icons, theme color, and display mode.
-   - Backend pairing / connection flow — QR code scanner or manual entry for host + port + pairing token. The pairing token is single-use and exchanged for short-lived session tokens immediately; it is never stored. The connection profile (host, port, short-lived session token) is stored in `localStorage` (PWA) or secure storage (Capacitor).
+   - Backend pairing / connection flow — QR code scanner or manual entry for host + port + pairing token. The pairing token is single-use and exchanged for short-lived session handling immediately; it is never stored. The PWA keeps only non-secret connection metadata such as host and port client-side, while any bearer or session secret uses HttpOnly cookies or in-memory handling. A later Capacitor shell can use secure storage where appropriate.
    - IndexedDB upload queue — offline image selection staged locally, flushed on reconnect.
    - Core browse, search, upload, and gallery actions — same API consumption as the desktop UI, adapted for mobile gestures and viewport.
 
