@@ -388,11 +388,11 @@ function GalleryPageContent() {
                 key={value}
                 href={buildGalleryHref({ filter: value })}
                 scroll={false}
-                className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                  filter === value
-                    ? "bg-white text-black"
-                    : "text-[#a1a4a5] hover:bg-white/[0.08] hover:text-[#f0f0f0]"
-                }`}
+                 className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                 filter === value
+                 ? "bg-white text-black"
+                 : "text-[color:var(--silver)] hover:bg-[color:var(--frost-soft)] hover:text-[color:var(--near-white)]"
+              }`}
               >
                 {label}
               </Link>
@@ -405,7 +405,7 @@ function GalleryPageContent() {
             className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-medium transition-colors ${
               likedOnly
                 ? "border border-[var(--red-soft)] bg-[var(--red-soft)] text-[#ff9bab]"
-                : "border border-[var(--frost)] text-[#a1a4a5] hover:bg-white/[0.08] hover:text-[#f0f0f0]"
+                : "border border-[var(--frost)] text-[color:var(--silver)] hover:bg-[color:var(--frost-soft)] hover:text-[color:var(--near-white)]"
             }`}
           >
             <Heart className={`h-4 w-4 ${likedOnly ? "fill-current" : ""}`} />

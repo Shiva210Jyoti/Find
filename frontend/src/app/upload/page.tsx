@@ -382,33 +382,34 @@ export default function UploadPage() {
           </div>
         </div>
 
-        <div
-          {...activeRootProps()}
-          className={`frost-panel scan-line cursor-pointer rounded-3xl p-10 text-center transition md:p-14 ${
-            isDragActive
-              ? "scale-[1.01] border-[#3b9eff] bg-[var(--blue-soft)]"
-              : "hover:border-[var(--frost-strong)] hover:bg-white/[0.045]"
-          } ${isUploading ? "pointer-events-none opacity-50" : ""}`}
-        >
-          <input {...activeInputProps()} />
-          <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-full border border-[var(--frost)] bg-white/[0.04]">
-            {mode === "single" ? (
-              <Upload className="h-6 w-6 text-[#3b9eff]" />
-            ) : (
-              <Package className="h-6 w-6 text-[#ff801f]" />
-            )}
-          </div>
+       <div
+  {...activeRootProps()}
+  className={`frost-panel scan-line cursor-pointer rounded-3xl p-10 text-center transition md:p-14 ${
+    isDragActive
+      ? "scale-[1.01] border-[color:var(--blue)] bg-[var(--blue-soft)]"
+      : "hover:border-[var(--frost-strong)] hover:bg-[color:var(--frost-soft)]"
+  } ${isUploading ? "pointer-events-none opacity-50" : ""}`}
+>
+  <input {...activeInputProps()} />
 
-          <p className="mb-2 text-base font-medium text-[#f0f0f0]">
-            {isDragActive
-              ? "Drop to upload"
-              : mode === "single"
-                ? "Drop images here"
-                : "Drop a ZIP archive here"}
-          </p>
-          <p className="text-sm text-[#a1a4a5]">{helperText}</p>
-        </div>
+  <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-full border border-[var(--frost)] bg-[color:var(--frost-soft)]">
+    {mode === "single" ? (
+      <Upload className="h-6 w-6 text-[color:var(--blue)]" />
+    ) : (
+      <Package className="h-6 w-6 text-[color:var(--orange)]" />
+    )}
+  </div>
 
+  <p className="mb-2 text-base font-medium text-[color:var(--near-white)]">
+    {isDragActive
+      ? "Drop to upload"
+      : mode === "single"
+        ? "Drop images here"
+        : "Drop a ZIP archive here"}
+  </p>
+
+  <p className="text-sm text-[color:var(--silver)]">{helperText}</p>
+</div>
         {fileRejections.length > 0 && (
           <div className="mt-6 rounded-3xl border border-[var(--red-soft)] bg-[var(--red-soft)] p-4">
             <p className="mb-2 text-sm font-medium text-[#ff9bab]">
