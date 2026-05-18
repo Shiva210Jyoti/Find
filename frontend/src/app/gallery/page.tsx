@@ -33,24 +33,12 @@ import {
 } from "@/lib/api";
 import { resolveMediaUrl } from "@/lib/media";
 
-const validStatuses = ["all", "indexed", "processing", "failed"] as const;
-type FilterType = (typeof validStatuses)[number];
-
 function GalleryPageContent() {
-  const searchParams = useSearchParams();
-
-  const rawStatus = searchParams.get("status");
-  const initialFilter: FilterType = validStatuses.includes(
-    rawStatus as FilterType,
-  )
-    ? (rawStatus as FilterType)
-    : "all";
-
   const [page, setPage] = useState(1);
-  const [filter, setFilter] = useState<FilterType>(initialFilter);
-  const [likedOnly, setLikedOnly] = useState(
-    searchParams.get("liked") === "true",
-  );
+  const [filter, setFilter] = useState<
+    "all" | "indexed" | "processing" | "failed"
+  >("all");
+  const [likedOnly, setLikedOnly] = useState(false);
   const [selectedMediaId, setSelectedMediaId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{
     id: number;
@@ -63,7 +51,7 @@ function GalleryPageContent() {
   const limit = 24;
 
   const queryClient = useQueryClient();
-
+  const searchParams = useSearchParams();
   const galleryQueryKey = useMemo(
     () => ["gallery", page, filter, likedOnly] as const,
     [page, filter, likedOnly],
@@ -89,7 +77,6 @@ function GalleryPageContent() {
         : false;
     },
   });
-
   useEffect(() => {
     if (hasOpenedFromQuery) {
       return;
@@ -140,7 +127,6 @@ function GalleryPageContent() {
       cancelled = true;
     };
   }, [data, searchParams, hasOpenedFromQuery]);
-
   const likeMutation = useMutation({
     mutationFn: (mediaId: number) => toggleLike(mediaId),
     onSuccess: ({ id }) => {
@@ -201,11 +187,11 @@ function GalleryPageContent() {
     onSuccess: ({ media_id }) => {
       queryClient.invalidateQueries({ queryKey: ["gallery"] });
       queryClient.invalidateQueries({ queryKey: ["image-detail", media_id] });
-      toast.success("Retry queued - analysis will restart shortly.");
+      toast.success("Retry queued — analysis will restart shortly.");
     },
     onError: () => {
       toast.error(
-        "Retry failed. The queue may be unavailable - please try again.",
+        "Retry failed. The queue may be unavailable — please try again.",
       );
     },
   });
@@ -264,11 +250,11 @@ function GalleryPageContent() {
     setQuerySelectedItem(null);
   }, []);
 
-  const filters: { label: string; value: FilterType }[] = [
-    { label: "All", value: "all" },
-    { label: "Indexed", value: "indexed" },
-    { label: "Processing", value: "processing" },
-    { label: "Failed", value: "failed" },
+  const filters = [
+    { label: "All", value: "all" as const },
+    { label: "Indexed", value: "indexed" as const },
+    { label: "Processing", value: "processing" as const },
+    { label: "Failed", value: "failed" as const },
   ];
 
   const handleToggleLike = useCallback(
@@ -495,11 +481,7 @@ function GalleryPageContent() {
                             aria-label="Retry analysis"
                           >
                             <RotateCcw
-                              className={`h-3.5 w-3.5 ${
-                                reprocessMutation.isPending
-                                  ? "animate-spin"
-                                  : ""
-                              }`}
+                              className={`h-3.5 w-3.5 ${reprocessMutation.isPending ? "animate-spin" : ""}`}
                             />
                           </button>
                         )}
@@ -623,7 +605,6 @@ function GalleryPageContent() {
     </div>
   );
 }
-
 export default function GalleryPage() {
   return (
     <Suspense fallback={null}>
