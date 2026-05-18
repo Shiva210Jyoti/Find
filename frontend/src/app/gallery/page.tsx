@@ -86,7 +86,8 @@ function getGalleryEmptyState(
     return likedOnly
       ? {
           title: "No liked images are processing",
-          subtitle: "None of your liked images are queued or running right now.",
+          subtitle:
+            "None of your liked images are queued or running right now.",
           showUploadLink: false,
           showClearLikedOnly: true,
         }
