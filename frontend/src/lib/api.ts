@@ -291,7 +291,11 @@ export function extractErrorMessage(error: unknown, fallback: string): string {
     if (typeof data?.detail === "string" && data.detail.trim()) {
       return data.detail.trim();
     }
-    if (typeof data?.detail === "object" && typeof data.detail?.message === "string" && data.detail.message.trim()) {
+    if (
+      typeof data?.detail === "object" &&
+      typeof data.detail?.message === "string" &&
+      data.detail.message.trim()
+    ) {
       return data.detail.message.trim();
     }
     if (typeof data?.message === "string" && data.message.trim()) {

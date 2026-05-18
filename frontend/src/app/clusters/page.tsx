@@ -10,12 +10,12 @@ import {
   type PreviewMedia,
 } from "@/components/image-preview-modal";
 import {
+  extractErrorMessage,
   getClusterDetail,
   getClusters,
+  getGallery,
   getJobStatus,
   triggerClustering,
-  extractErrorMessage,
-  getGallery,
 } from "@/lib/api";
 import { resolveMediaUrl } from "@/lib/media";
 
@@ -145,8 +145,14 @@ export default function ClustersPage() {
   const isClusterActionBusy =
     clusterMutation.isPending || clusterJobQuery.isFetching || isJobActive;
   const minClusterSize = data?.min_cluster_size ?? 2;
+  const indexedImageCount = indexedQuery.data?.total ?? 0;
+  const hasEnoughIndexedImages =
+    !indexedQuery.isSuccess || indexedImageCount >= minClusterSize;
   const isClusterButtonDisabled =
-    isClusterActionBusy || (indexedQuery.isSuccess && (indexedQuery.data?.total ?? 0) < minClusterSize);
+    isClusterActionBusy || !hasEnoughIndexedImages;
+  const clusteringUnavailableMessage = !hasEnoughIndexedImages
+    ? `Need at least ${minClusterSize} indexed images with vectors before clustering. Found ${indexedImageCount}.`
+    : null;
   const filteredMembers =
     selectedClusterQuery.data?.members.filter((member) =>
       member.filename.toLowerCase().includes(filterText.toLowerCase()),
@@ -184,11 +190,7 @@ export default function ClustersPage() {
               onClick={() => clusterMutation.mutate()}
               disabled={isClusterButtonDisabled}
               className="white-pill px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-              title={
-                indexedQuery.isSuccess && (indexedQuery.data?.total ?? 0) < minClusterSize
-                  ? `Need at least ${minClusterSize} indexed images (found ${indexedQuery.data?.total})`
-                  : undefined
-              }
+              title={clusteringUnavailableMessage ?? undefined}
             >
               {isClusterActionBusy ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -235,18 +237,15 @@ export default function ClustersPage() {
             <Grid3x3 className="mx-auto mb-4 h-10 w-10 text-[#5f6568]" />
             <p className="mb-2 text-[#f0f0f0]">No clusters yet</p>
             <p className="mb-6 text-sm leading-6 text-[#a1a4a5]">
-              Index a few related images, then run clustering.
+              {clusteringUnavailableMessage ??
+                "Index a few related images, then run clustering."}
             </p>
             <button
               type="button"
               onClick={() => clusterMutation.mutate()}
               disabled={isClusterButtonDisabled}
               className="white-pill px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-              title={
-                indexedQuery.isSuccess && (indexedQuery.data?.total ?? 0) < minClusterSize
-                  ? `Need at least ${minClusterSize} indexed images (found ${indexedQuery.data?.total})`
-                  : undefined
-              }
+              title={clusteringUnavailableMessage ?? undefined}
             >
               {isClusterActionBusy ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
