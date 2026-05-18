@@ -30,21 +30,17 @@ def get_job_status(job_id: str):
         status_info = {
             "job_id": job_id,
             "status": job.get_status(),
-            # ✅ NEW: stage tracking
-            "stage": job.meta.get("stage", "unknown"),
+            "stage": job.meta.get("stage", "queued"),
             "created_at": job.created_at.isoformat() if job.created_at else None,
             "started_at": job.started_at.isoformat() if job.started_at else None,
             "ended_at": job.ended_at.isoformat() if job.ended_at else None,
         }
 
-        # ✅ result if finished
         if job.is_finished:
             status_info["result"] = job.result
 
-        # ✅ error if failed
         if job.is_failed:
-            status_info["error"] = str(job.exc_info)
-            # helpful stage fallback
+            status_info["error"] = job.meta.get("error", "Job failed")
             status_info["stage"] = job.meta.get("stage", "failed")
 
         return status_info
