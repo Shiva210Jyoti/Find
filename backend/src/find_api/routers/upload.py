@@ -86,7 +86,7 @@ async def upload_bulk_images(
                 name_lower = info.filename.lower()
                 if any(
                     name_lower.endswith(ext)
-                    for ext in (".zip", ".tar", ".tgz", ".7z", ".rar")
+                    for ext in (".zip", ".tar", ".tar.gz", ".tgz", ".7z", ".rar")
                 ):
                     raise HTTPException(
                         400,
