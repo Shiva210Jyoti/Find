@@ -22,8 +22,14 @@ It intentionally does **not** run on `edited` to reduce unnecessary runs.
 4. If linked issue(s) exist:
    - Removes `needs linked issue` if present.
    - Assigns the PR to the PR author **only if** the author is assigned on at least one linked issue.
-5. Never closes PRs.
-6. Never removes `do-not-merge` automatically.
+5. If the PR author is `dependabot[bot]`:
+   - Adds `dependencies`.
+   - Removes `needs linked issue` if present.
+   - Does not assign the PR.
+6. Ignores missing or invalid issue references instead of failing the workflow.
+7. Checks only the first 10 unique linked issue references to keep API usage bounded.
+8. Never closes PRs.
+9. Never removes `do-not-merge` automatically.
 
 ## Manual verification matrix
 
@@ -53,6 +59,24 @@ Expected:
 - `needs linked issue` is absent.
 - PR remains open.
 - PR is **not** auto-assigned to PR author.
+
+### Case D: Dependabot dependency PR
+
+Expected:
+
+- `do-not-merge` is present.
+- `dependencies` is present.
+- `needs linked issue` is absent.
+- PR remains open.
+- PR assignees are unchanged.
+
+### Case E: PR body references a missing issue
+
+Expected:
+
+- Workflow does not fail just because one referenced issue is missing.
+- Valid linked issues are still checked.
+- If no valid linked issue assigns the PR author, PR assignees are unchanged.
 
 ## Permissions
 
