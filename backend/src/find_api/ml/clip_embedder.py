@@ -58,27 +58,27 @@ class CLIPEmbedder:
             if isinstance(image, np.ndarray):
                 image = Image.fromarray(image)
 
-            bundle = self.manager.get_model(
+            with self.manager.use_model(
                 "siglip", self._load_model, config_key=self._config_key()
-            )
-            model = bundle["model"]
-            preprocess = bundle["preprocess"]
-            device = bundle["device"]
+            ) as bundle:
+                model = bundle["model"]
+                preprocess = bundle["preprocess"]
+                device = bundle["device"]
 
-            # Preprocess and convert to tensor
-            image_input = preprocess(image).unsqueeze(0).to(device)
+                # Preprocess and convert to tensor
+                image_input = preprocess(image).unsqueeze(0).to(device)
 
-            # Generate embedding
-            with (
-                torch.inference_mode(),
-                torch.autocast(
-                    device_type="cuda",
-                    dtype=torch.float16,
-                    enabled=device == "cuda",
-                ),
-            ):
-                embedding = model.encode_image(image_input)
-                embedding = embedding / embedding.norm(dim=-1, keepdim=True)
+                # Generate embedding
+                with (
+                    torch.inference_mode(),
+                    torch.autocast(
+                        device_type="cuda",
+                        dtype=torch.float16,
+                        enabled=device == "cuda",
+                    ),
+                ):
+                    embedding = model.encode_image(image_input)
+                    embedding = embedding / embedding.norm(dim=-1, keepdim=True)
 
             # Convert to numpy
             return embedding.cpu().numpy()[0]
@@ -92,30 +92,30 @@ class CLIPEmbedder:
         Generate embedding for text query
         """
         try:
-            bundle = self.manager.get_model(
+            with self.manager.use_model(
                 "siglip", self._load_model, config_key=self._config_key()
-            )
-            model = bundle["model"]
-            tokenizer = bundle["tokenizer"]
-            device = bundle["device"]
+            ) as bundle:
+                model = bundle["model"]
+                tokenizer = bundle["tokenizer"]
+                device = bundle["device"]
 
-            # Tokenize text
-            if isinstance(text, str):
-                text = [text]
+                # Tokenize text
+                if isinstance(text, str):
+                    text = [text]
 
-            text_input = tokenizer(text).to(device)
+                text_input = tokenizer(text).to(device)
 
-            # Generate embedding
-            with (
-                torch.inference_mode(),
-                torch.autocast(
-                    device_type="cuda",
-                    dtype=torch.float16,
-                    enabled=device == "cuda",
-                ),
-            ):
-                embedding = model.encode_text(text_input)
-                embedding = embedding / embedding.norm(dim=-1, keepdim=True)
+                # Generate embedding
+                with (
+                    torch.inference_mode(),
+                    torch.autocast(
+                        device_type="cuda",
+                        dtype=torch.float16,
+                        enabled=device == "cuda",
+                    ),
+                ):
+                    embedding = model.encode_text(text_input)
+                    embedding = embedding / embedding.norm(dim=-1, keepdim=True)
 
             # Convert to numpy
             result = embedding.cpu().numpy()

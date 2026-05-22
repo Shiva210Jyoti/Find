@@ -51,11 +51,10 @@ class FaceDetector:
                 image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
             config_key = f"model=antelopev2|gpu={settings.USE_GPU}"
-            app = self.manager.get_model(
+            with self.manager.use_model(
                 "insightface", self._load_model, config_key=config_key
-            )
-
-            faces = app.get(image)
+            ) as app:
+                faces = app.get(image)
 
             results = []
             for face in faces:

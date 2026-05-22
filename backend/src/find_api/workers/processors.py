@@ -12,6 +12,7 @@ from PIL import Image
 from find_api.core.config import settings
 from find_api.core.model_manager import ModelUnavailableError
 from find_api.ml.mock_embedder import get_mock_embedder
+from find_api.utils.errors import sanitize_error
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +55,22 @@ def extract_image_metadata(
             "ocr_text": "",
             "text_blocks": [],
             "mock": True,
+            "stage_status": {
+                "object_detection": {"status": "success", "error": None},
+                "captioning": {"status": "success", "error": None},
+                "ocr": {"status": "success", "error": None},
+                "embedding": {"status": "pending", "error": None},
+            },
         }
 
-    metadata = {}
+    metadata = {
+        "stage_status": {
+            "object_detection": {"status": "pending", "error": None},
+            "captioning": {"status": "pending", "error": None},
+            "ocr": {"status": "pending", "error": None},
+            "embedding": {"status": "pending", "error": None},
+        }
+    }
 
     # 1. Object Detection
     try:
@@ -68,11 +82,19 @@ def extract_image_metadata(
         detector = get_object_detector()
         objects = detector.detect(image)
         metadata["objects"] = objects
+        metadata["stage_status"]["object_detection"] = {
+            "status": "success",
+            "error": None,
+        }
         logger.info(f"Detected {len(objects)} objects")
     except Exception as e:
         logger.exception("Object detection failed")
         metadata["objects"] = []
         _record_stage_error(metadata, "objects", e)
+        metadata["stage_status"]["object_detection"] = {
+            "status": "failed",
+            "error": sanitize_error(e),
+        }
 
     # 2. Image Captioning
     try:
@@ -84,11 +106,16 @@ def extract_image_metadata(
         captioner = get_image_captioner()
         caption = captioner.generate_caption(image)
         metadata["caption"] = caption
+        metadata["stage_status"]["captioning"] = {"status": "success", "error": None}
         logger.info(f"Caption: {caption}")
     except Exception as e:
         logger.exception("Captioning failed")
         metadata["caption"] = ""
         _record_stage_error(metadata, "caption", e)
+        metadata["stage_status"]["captioning"] = {
+            "status": "failed",
+            "error": sanitize_error(e),
+        }
 
     # 3. OCR Text Extraction
     try:
@@ -102,12 +129,17 @@ def extract_image_metadata(
         text_blocks = ocr.extract_text_with_boxes(image)
         metadata["ocr_text"] = ocr_text
         metadata["text_blocks"] = text_blocks
+        metadata["stage_status"]["ocr"] = {"status": "success", "error": None}
         logger.info(f"Extracted {len(ocr_text)} characters")
     except Exception as e:
         logger.exception("OCR failed")
         metadata["ocr_text"] = ""
         metadata["text_blocks"] = []
         _record_stage_error(metadata, "ocr", e)
+        metadata["stage_status"]["ocr"] = {
+            "status": "failed",
+            "error": sanitize_error(e),
+        }
 
     return metadata
 
@@ -153,8 +185,8 @@ def generate_hybrid_embedding(
         logger.info("Hybrid embedding generated")
         return hybrid_vector.tolist()
 
-    except Exception as e:
-        logger.error(f"CLIP embedding failed: {e}")
+    except Exception:
+        logger.exception("CLIP embedding failed")
         raise
 
 
