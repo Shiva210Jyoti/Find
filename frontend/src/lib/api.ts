@@ -341,11 +341,13 @@ export interface PersonItem {
   name: string | null;
   face_count: number;
   sample_media_ids: number[];
+  thumbnail_url?: string | null;
 }
 
 export interface PersonImage {
   media_id: number;
   filename: string;
+  thumbnail_url?: string | null;
   faces: {
     id: number;
     bounding_box: { x1: number; y1: number; x2: number; y2: number };
