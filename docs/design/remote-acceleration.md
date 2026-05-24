@@ -108,7 +108,8 @@ When remote mode is enabled, the following data leaves the local device for each
 | Object detection (YOLOv10) | Full image bytes (JPEG/PNG) | High — full image content |
 | Captioning (Florence-2) | Full image bytes | High — full image content |
 | OCR (PaddleOCR) | Full image bytes | High — may include personal/sensitive text visible in the image |
-| CLIP embedding (SigLIP) | Full image bytes | High — full image content |
+| Image embedding (SigLIP) | Full image bytes during indexing | High — full image content |
+| Search query embedding | Search query text only | Medium — may reveal what the user is looking for |
 | EXIF extraction | Nothing — always runs locally | N/A |
 | Clustering (HDBSCAN) | 768-d SigLIP (ViT-B-16) embedding vectors only (no image files) | Medium — no image file, but vectors encode image content (see §5.3) |
 
@@ -334,12 +335,13 @@ Shown once when the toggle is first turned ON. Not shown again unless settings a
 │  Remote processing sends your images to the server you configured.       │
 │                                                                          │
 │  What is sent to your remote server:                                     │
-│  • Full image files (for detection, captioning, OCR, and search)         │
+│  • Full image files (for detection, captioning, OCR, and indexing)       │
+│  • Search query text (when remote search embedding is enabled)           │
 │  • Numerical vectors only for clustering (no image file)                 │
 │  • EXIF data is stripped before sending if that option is enabled        │
 │                                                                          │
 │  What is never sent:                                                     │
-│  • Images to any Anthropic or third-party server                         │
+│  • Images to any project-hosted or third-party server                    │
 │  • Any data without your explicit configuration                          │
 │                                                                          │
 │  Note: Recent research shows that CLIP/SigLIP vectors — even without     │
@@ -397,7 +399,7 @@ Requires acknowledgment per-session; cannot be permanently dismissed.
 | Question | Answer |
 |----------|--------|
 | Should Find support only self-hosted endpoints, or also a hosted demo mode? | Self-hosted only in this design. A hosted demo requires a separate design with separate consent. Immich, Ollama, and PhotoPrism all follow the self-hosted-only pattern for ML inference. |
-| What exact data is sent for each remote feature? | Full image bytes for detection, captioning, OCR, and embedding. 768-d float vectors only for clustering. EXIF stripped before any transmission if the option is enabled. See §4.2. |
+| What exact data is sent for each remote feature? | Full image bytes for detection, captioning, OCR, and image embedding during indexing. Search query text for query embedding when remote search is enabled. 768-d float vectors only for clustering. EXIF stripped before image transmission if the option is enabled. See §4.2. |
 | Can remote processing happen per-library or per-image rather than globally? | Global on/off in v1. Per-granularity overrides deferred — consistent with how Immich handles remote ML (global URL setting, not per-album). |
 | How should authentication work for a user-owned backend? | 256-bit bearer token in `Authorization` header, required on all inference endpoints. Network-layer security (Tailscale recommended) provides transport encryption. This is more secure than Immich's zero-auth ML container, appropriate given Find's explicit cross-network use case. |
 | How should mobile connect securely to desktop Find? | Tailscale Serve (recommended) — provides HTTPS with auto-provisioned TLS, WireGuard encryption, MagicDNS hostnames. Local LAN as fallback. Cloudflare Tunnel as a documented option with an explicit warning that Cloudflare decrypts traffic at its edge. |
