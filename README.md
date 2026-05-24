@@ -239,7 +239,7 @@ These only affect the worker and the `/api/cluster/run` path. Frontend and API b
 
 ## Troubleshooting
 
-- [Common Setup Troubleshooting Guide](docs/TROUBLESHOOTING.md)
+- [Common Setup Errors](docs/COMMON_SETUP_ERRORS.md)
 
 ### Images stuck in processing
 
