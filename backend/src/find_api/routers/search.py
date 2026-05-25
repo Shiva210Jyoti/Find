@@ -1,6 +1,7 @@
 """
 Search endpoint for semantic image search
 """
+import time
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -20,8 +21,9 @@ router = APIRouter()
 @router.get("/search")
 def search_images(
     q: str = Query(..., min_length=1, description="Search query"),
-    limit: int = Query(24, ge=1, le=100, description="Maximum results to return"),
+   limit: int = Query(24, ge=1, le=100, description="Maximum results to return"),
     skip: int = Query(0, ge=0, description="Number of results to skip"),
+    debug: bool = Query(False, description="Include retrieval diagnostics in response"),
     db: Session = Depends(get_db),
 ):
     """
@@ -35,6 +37,8 @@ def search_images(
     Returns:
         Paginated list of matching images with metadata for frontend navigation.
     """
+    t_total_start = time.perf_counter()
+
     # Generate query embedding
     if settings.ML_MODE.lower() == "mock":
         from find_api.ml.mock_embedder import get_mock_embedder
@@ -45,7 +49,9 @@ def search_images(
 
         embedder = get_clip_embedder()
 
+    t_embed_start = time.perf_counter()
     query_embedding = embedder.embed_text(q)
+    embedding_ms = (time.perf_counter() - t_embed_start) * 1000
 
     # Convert to string format for pgvector
     embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
@@ -102,6 +108,7 @@ def search_images(
     """
     )
 
+    t_retrieval_start = time.perf_counter()
     result = db.execute(
         query_sql,
         {
@@ -111,6 +118,7 @@ def search_images(
             "threshold": threshold,
         },
     )
+    retrieval_ms = (time.perf_counter() - t_retrieval_start) * 1000
 
     # Build response
     results = []
@@ -169,7 +177,9 @@ def search_images(
     page = (skip // limit) + 1 if limit > 0 else 1
     has_more = (skip + len(results)) < total_count
 
-    return {
+    total_ms = (time.perf_counter() - t_total_start) * 1000
+
+    response: Dict = {
         "query": q,
         "results": results,
         "total": total_count,
@@ -178,3 +188,16 @@ def search_images(
         "skip": skip,
         "has_more": has_more,
     }
+
+    debug_enabled = debug and settings.ENVIRONMENT in {"local", "development"}
+    if debug_enabled:
+        response["diagnostics"] = {
+            "embedding_ms": round(embedding_ms, 2),
+            "retrieval_ms": round(retrieval_ms, 2),
+            "total_ms": round(total_ms, 2),
+            "results_returned": len(results),
+            "similarity_threshold": threshold,
+            "ml_mode": settings.ML_MODE,
+        }
+
+    return response
