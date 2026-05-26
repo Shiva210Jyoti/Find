@@ -70,7 +70,7 @@ def _make_mock_db(media_rows: list[SimpleNamespace]) -> MagicMock:
 
 def _make_clusterer(labels: list[int], n_clusters: int | None = None) -> MagicMock:
     """Return a mock clusterer that yields the given `labels`."""
-    unique = {int(l) for l in labels if int(l) != -1}
+    unique = {int(lbl) for lbl in labels if int(lbl) != -1}
     n = n_clusters if n_clusters is not None else len(unique)
     info = {
         "n_clusters": n,
@@ -251,9 +251,7 @@ class TestSuccessPath:
             call_order.append("update")
             return MagicMock()
 
-        mock_db.query.return_value.filter.return_value.update.side_effect = (
-            track_update
-        )
+        mock_db.query.return_value.filter.return_value.update.side_effect = track_update
 
         result = _run(mock_db, clusterer)
         return result, mock_db, call_order
