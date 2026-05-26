@@ -901,11 +901,9 @@ function GalleryPageContent() {
               onSortOrderChange={(newOrder) => {
                 updateGalleryParams({ sortOrder: newOrder });
               }}
-              onDateRangeChange={(newRange) => {
-                updateGalleryParams({ dateRange: newRange });
-              }}
-              onCustomDateChange={(newStart, newEnd) => {
+              onDateFilterChange={(newRange, newStart, newEnd) => {
                 updateGalleryParams({
+                  dateRange: newRange,
                   dateStart: newStart,
                   dateEnd: newEnd,
                 });

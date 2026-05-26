@@ -10,8 +10,7 @@ interface GalleryDateFilterProps {
   dateStart: string | null;
   dateEnd: string | null;
   onSortOrderChange: (order: SortOrder) => void;
-  onDateRangeChange: (preset: DateRangePreset | null) => void;
-  onCustomDateChange: (start: string | null, end: string | null) => void;
+  onDateFilterChange: (preset: DateRangePreset | null, start: string | null, end: string | null) => void;
 }
 
 export function GalleryDateFilter({
@@ -20,8 +19,7 @@ export function GalleryDateFilter({
   dateStart,
   dateEnd,
   onSortOrderChange,
-  onDateRangeChange,
-  onCustomDateChange,
+  onDateFilterChange,
 }: GalleryDateFilterProps) {
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -72,11 +70,9 @@ export function GalleryDateFilter({
 
   const handleCustomDateApply = () => {
     if (customStart || customEnd) {
-      onDateRangeChange("custom");
-      onCustomDateChange(customStart || null, customEnd || null);
+      onDateFilterChange("custom", customStart || null, customEnd || null);
     } else {
-      onDateRangeChange(null);
-      onCustomDateChange(null, null);
+      onDateFilterChange(null, null, null);
     }
     setShowDatePicker(false);
   };
@@ -84,8 +80,7 @@ export function GalleryDateFilter({
   const handleClearCustom = () => {
     setCustomStart("");
     setCustomEnd("");
-    onDateRangeChange(null);
-    onCustomDateChange(null, null);
+    onDateFilterChange(null, null, null);
     setShowDatePicker(false);
   };
 
@@ -168,13 +163,7 @@ export function GalleryDateFilter({
                   key={option.label}
                   type="button"
                   onClick={() => {
-                    if (option.value) {
-                      onDateRangeChange(option.value);
-                      onCustomDateChange(null, null);
-                    } else {
-                      onDateRangeChange(null);
-                      onCustomDateChange(null, null);
-                    }
+                    onDateFilterChange(option.value, null, null);
                     setShowDatePicker(false);
                     setCustomStart("");
                     setCustomEnd("");
