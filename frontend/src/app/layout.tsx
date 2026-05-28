@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import "./globals.css";
@@ -6,10 +5,10 @@ import CursorGlow from "@/components/CursorGlow";
 import NavBar from "@/components/NavBar";
 import { Providers } from "./providers";
 
-export const metadata: Metadata = {
-  title: "Find - Local AI Image Intelligence",
-  description:
-    "AI-powered image search and organization that runs entirely on your device",
+export const metadata = {
+  title: "Find",
+  description: "Find web application",
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({
