@@ -2,9 +2,9 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Check,
   ChevronLeft,
   ChevronRight,
+  Check,
   Copy,
   Download,
   Heart,
@@ -669,13 +669,9 @@ export function ImagePreviewModal({
                         className="frost-button px-2 py-1 text-xs text-[color:var(--silver)]"
                         aria-label={
                           ocrCopied
-                          ? "OCR text copied to clipboard"
-                          : "Copy OCR text to clipboard"
-                          }
-  
-    
-    
-
+                            ? "OCR text copied to clipboard"
+                            : "Copy OCR text to clipboard"
+                        }
                       >
                         {ocrCopied ? (
                           <Check className="h-3 w-3 text-[color:var(--green)]" />
