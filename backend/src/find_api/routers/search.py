@@ -2,20 +2,39 @@
 Search endpoint for semantic image search
 """
 
+import json
 import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-import json
 
 from find_api.core.config import settings
 from find_api.core.database import get_db
 from find_api.core.storage import get_file_url
 from find_api.routers.gallery import build_thumbnail_url
+from find_api.services.query_cache import get_cached_query, set_cached_query
 
 router = APIRouter()
+
+
+def _search_index_signature(db: Session) -> str:
+    """Return a small DB-backed signature for search-visible indexed media."""
+    signature_result = db.execute(
+        text(
+            """
+            SELECT COUNT(*) AS indexed_count, MAX(processed_at) AS max_processed_at
+            FROM media
+            WHERE status = 'indexed' AND vector IS NOT NULL AND is_hidden = false
+        """
+        )
+    )
+    row = signature_result.mappings().first() or {}
+    max_processed = row.get("max_processed_at")
+    if hasattr(max_processed, "isoformat"):
+        max_processed = max_processed.isoformat()
+    return f"{row.get('indexed_count', 0)}:{max_processed or ''}"
 
 
 @router.get("/search")
@@ -38,6 +57,14 @@ def search_images(
         Paginated list of matching images with metadata for frontend navigation.
     """
     t_total_start = time.perf_counter()
+
+    # Keep debug requests uncached so timing diagnostics describe the actual path.
+    index_signature = None
+    if not debug:
+        index_signature = _search_index_signature(db)
+        cached = get_cached_query(q, limit, skip, index_signature)
+        if cached is not None:
+            return cached["response"]
 
     # Generate query embedding
     if settings.ML_MODE.lower() == "mock":
@@ -80,7 +107,7 @@ def search_images(
     query_sql = text(
         """
         WITH ranked_results AS (
-            SELECT 
+            SELECT
                 id,
                 filename,
                 minio_key,
@@ -199,5 +226,10 @@ def search_images(
             "similarity_threshold": threshold,
             "ml_mode": settings.ML_MODE,
         }
+
+    if not debug:
+        set_cached_query(
+            q, limit, skip, index_signature or "", query_embedding, response
+        )
 
     return response
