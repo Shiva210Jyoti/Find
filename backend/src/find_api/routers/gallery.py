@@ -104,7 +104,11 @@ def get_gallery(
     ),
     min_width: Optional[int] = Query(None, ge=1, description="Minimum image width"),
     min_height: Optional[int] = Query(None, ge=1, description="Minimum image height"),
-    file_type: Optional[str] = Query(None, description="Filter by image file type"),
+    file_type: Optional[str] = Query(
+        None,
+        max_length=20,
+        description="Filter by image file type",
+    ),
     db: Session = Depends(get_db),
 ):
     """

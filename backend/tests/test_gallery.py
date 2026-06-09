@@ -496,3 +496,46 @@ class TestGalleryMetadataFilters:
         body = response.json()
         assert body["total"] == 1
         assert body["items"][0]["filename"] == "graphic.png"
+
+    def test_gallery_filter_excludes_missing_exif_data(self, client, db):
+        with_exif = _seed(db, filename="canon.jpg", status="indexed")
+        without_exif = _seed(db, filename="no-exif.jpg", status="indexed")
+        with_exif.exif_json = {"make": "Canon", "model": "EOS 80D"}
+        without_exif.exif_json = None
+        db.commit()
+
+        response = client.get("/api/gallery", params={"camera_make": "Canon"})
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["total"] == 1
+        assert body["items"][0]["filename"] == "canon.jpg"
+
+    def test_gallery_supports_combined_metadata_filters(self, client, db):
+        large_canon = _seed(db, filename="large-canon.jpg", status="indexed")
+        small_canon = _seed(db, filename="small-canon.jpg", status="indexed")
+        large_sony = _seed(db, filename="large-sony.jpg", status="indexed")
+
+        large_canon.exif_json = {"make": "Canon", "model": "EOS 80D"}
+        large_canon.width = 3000
+        large_canon.height = 2000
+
+        small_canon.exif_json = {"make": "Canon", "model": "EOS M50"}
+        small_canon.width = 640
+        small_canon.height = 480
+
+        large_sony.exif_json = {"make": "Sony", "model": "Alpha 7"}
+        large_sony.width = 3000
+        large_sony.height = 2000
+
+        db.commit()
+
+        response = client.get(
+            "/api/gallery",
+            params={"camera_make": "Canon", "min_width": 1000},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["total"] == 1
+        assert body["items"][0]["filename"] == "large-canon.jpg"
