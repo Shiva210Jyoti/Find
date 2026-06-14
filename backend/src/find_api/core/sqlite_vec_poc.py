@@ -7,6 +7,7 @@ import struct
 
 import sqlite_vec
 
+EMBEDDING_DIM = 768
 
 def create_connection(db_path=":memory:"):
     conn = sqlite3.connect(str(db_path))
@@ -131,3 +132,72 @@ def search_media(
     ).fetchall()
 
     return rows
+
+class SQLiteVecPOC:
+    def __init__(self, db_path=":memory:"):
+        self.conn = create_connection(db_path)
+
+    def create_schema(self):
+        create_schema(
+            self.conn,
+            EMBEDDING_DIM,
+        )
+
+    def insert_media(
+        self,
+        media_id,
+        filename,
+        embedding,
+    ):
+        insert_media(
+            self.conn,
+            media_id,
+            filename,
+        )
+
+        insert_vector(
+            self.conn,
+            media_id,
+            embedding,
+        )
+
+    def search(
+        self,
+        embedding,
+        limit=10,
+    ):
+        rows = search_media(
+            self.conn,
+            embedding,
+            limit,
+        )
+
+        return [
+            {
+                "id": row[0],
+                "filename": row[1],
+                "distance": row[2],
+            }
+            for row in rows
+        ]
+
+    def gallery_query(self):
+        rows = self.conn.execute(
+            """
+            SELECT
+                id,
+                filename,
+                status
+            FROM media
+            ORDER BY id
+            """
+        ).fetchall()
+
+        return [
+            {
+                "id": row[0],
+                "filename": row[1],
+                "status": row[2],
+            }
+            for row in rows
+        ]
