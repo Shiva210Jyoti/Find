@@ -4,11 +4,9 @@ Uses factory pattern to support multiple storage backends
 """
 
 import logging
-from io import BytesIO
-from PIL import Image, ImageOps
 
 from find_api.core.storage_factory import get_storage_instance
-from find_api.core.storage_minio import generate_thumbnail, upload_thumbnail
+from find_api.core.storage_minio import upload_thumbnail
 
 logger = logging.getLogger(__name__)
 

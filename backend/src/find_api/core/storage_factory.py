@@ -4,7 +4,6 @@ Provides a factory function to create and initialize the appropriate storage bac
 """
 
 import logging
-from typing import Literal
 
 from find_api.core.storage_abstract import StorageBackend
 from find_api.core.storage_minio import MinIOStorageBackend

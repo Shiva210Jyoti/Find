@@ -4,7 +4,6 @@ Defines the contract that all storage backends must implement
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 
 class StorageBackend(ABC):

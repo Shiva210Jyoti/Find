@@ -3,11 +3,9 @@ Local filesystem storage backend implementation
 Implements StorageBackend interface for local file storage (desktop mode)
 """
 
-import os
 import asyncio
 import logging
 from pathlib import Path
-from typing import Optional
 
 from find_api.core.storage_abstract import StorageBackend, StorageException
 
