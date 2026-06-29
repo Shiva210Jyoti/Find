@@ -15,10 +15,16 @@ from sqlalchemy.orm import Session
 
 from find_api.core.config import settings
 from find_api.core.database import get_db
+from find_api.core.dependencies import (
+    can_access_media,
+    get_required_user,
+    scope_media_query,
+)
 from find_api.core.queue import get_task_queue
 from find_api.core.storage import get_file_url, delete_file
 from find_api.models.media import Media
 from find_api.models.cluster import Cluster
+from find_api.models.user import User
 from find_api.services.query_cache import invalidate_query_cache
 from find_api.workers.jobs import analyze_image, generate_thumbnail_for_media
 
@@ -29,6 +35,7 @@ router = APIRouter()
 GalleryStatus = Literal["pending", "processing", "indexed", "failed"]
 SortOrder = Literal["newest", "oldest"]
 DateRangePreset = Literal["last_30_days", "last_60_days", "last_90_days", "custom"]
+OrientationFilter = Literal["landscape", "portrait", "square"]
 
 
 class BulkDeleteRequest(BaseModel):
@@ -159,12 +166,105 @@ def parse_date_range(
     return None, None
 
 
+def parse_metadata_date(value: str | None, field_name: str) -> datetime | None:
+    """Parse an ISO date/datetime query param into a timezone-aware datetime."""
+    if not value:
+        return None
+
+    raw_value = value.strip()
+    if not raw_value:
+        return None
+
+    is_date_only = "T" not in raw_value and ":" not in raw_value
+
+    try:
+        parsed = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise HTTPException(422, f"{field_name} must be a valid ISO date") from exc
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    if field_name == "date_to" and is_date_only:
+        parsed = parsed.replace(hour=23, minute=59, second=59, microsecond=999999)
+    return parsed
+
+
+def _public_media_query(db: Session):
+    """Return media rows visible through public gallery/image routes."""
+    return db.query(Media).filter(Media.is_hidden.is_(False))
+
+
+def _load_public_media_or_404(db: Session, media_id: int) -> Media:
+    """Load a visible media row or raise 404."""
+    media = _public_media_query(db).filter(Media.id == media_id).first()
+    if not media:
+        raise HTTPException(404, "Image not found")
+    return media
+
+
+def apply_metadata_filters(
+    query,
+    *,
+    camera_make: str | None = None,
+    camera_model: str | None = None,
+    min_width: int | None = None,
+    min_height: int | None = None,
+    file_type: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    orientation: OrientationFilter | None = None,
+):
+    """Apply shared metadata filters to a SQLAlchemy media query."""
+    camera_make = camera_make.strip() if camera_make else None
+    camera_model = camera_model.strip() if camera_model else None
+    file_type = file_type.strip() if file_type else None
+
+    if camera_make:
+        query = query.filter(
+            Media.exif_json["make"].as_string().ilike(f"%{camera_make}%")
+        )
+    if camera_model:
+        query = query.filter(
+            Media.exif_json["model"].as_string().ilike(f"%{camera_model}%")
+        )
+    if date_from is not None:
+        query = query.filter(Media.created_at >= date_from)
+    if date_to is not None:
+        query = query.filter(Media.created_at <= date_to)
+    if min_width is not None:
+        query = query.filter(Media.width >= min_width)
+    if min_height is not None:
+        query = query.filter(Media.height >= min_height)
+    if orientation == "landscape":
+        query = query.filter(Media.width > Media.height)
+    elif orientation == "portrait":
+        query = query.filter(Media.height > Media.width)
+    elif orientation == "square":
+        query = query.filter(Media.width == Media.height)
+    if file_type:
+        normalized_type = file_type.lower().lstrip(".")
+        mime_type_map = {
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "png": "image/png",
+            "webp": "image/webp",
+            "gif": "image/gif",
+            "bmp": "image/bmp",
+            "tif": "image/tiff",
+            "tiff": "image/tiff",
+        }
+        expected_content_type = mime_type_map.get(normalized_type, normalized_type)
+        query = query.filter(Media.content_type == expected_content_type)
+    return query
+
+
 @router.get("/gallery/counts", response_model=GalleryCountsResponse)
 def get_gallery_counts(
     liked: Optional[bool] = None,
     db: Session = Depends(get_db),
+    user: Optional[User] = Depends(get_required_user),
 ):
-    query = db.query(Media).filter(Media.is_hidden.is_(False))
+    query = scope_media_query(db.query(Media).filter(Media.is_hidden.is_(False)), user)
     if liked is not None:
         query = query.filter(Media.liked == liked)
 
@@ -201,7 +301,37 @@ def get_gallery(
         None,
         description="Custom range end date (YYYY-MM-DD) when date_range='custom'",
     ),
+    camera_make: Optional[str] = Query(
+        None,
+        max_length=255,
+        description="Filter by EXIF camera make",
+    ),
+    camera_model: Optional[str] = Query(
+        None,
+        max_length=255,
+        description="Filter by EXIF camera model",
+    ),
+    min_width: Optional[int] = Query(None, ge=1, description="Minimum image width"),
+    min_height: Optional[int] = Query(None, ge=1, description="Minimum image height"),
+    file_type: Optional[str] = Query(
+        None,
+        max_length=20,
+        description="Filter by image file type",
+    ),
+    date_from: Optional[str] = Query(
+        None,
+        description="Filter to media uploaded on or after this ISO date",
+    ),
+    date_to: Optional[str] = Query(
+        None,
+        description="Filter to media uploaded on or before this ISO date",
+    ),
+    orientation: Optional[OrientationFilter] = Query(
+        None,
+        description="Filter by image orientation",
+    ),
     db: Session = Depends(get_db),
+    user: Optional[User] = Depends(get_required_user),
 ):
     """
     Get paginated list of images with optional date filtering and sorting.
@@ -220,12 +350,32 @@ def get_gallery(
         Paginated list of media records
     """
     # Build query
-    query = db.query(Media).filter(Media.is_hidden.is_(False))
+    query = scope_media_query(_public_media_query(db), user)
 
     if status:
         query = query.filter(Media.status == status)
     if liked is not None:
         query = query.filter(Media.liked == liked)
+    parsed_date_from = parse_metadata_date(date_from, "date_from")
+    parsed_date_to = parse_metadata_date(date_to, "date_to")
+    if (
+        parsed_date_from is not None
+        and parsed_date_to is not None
+        and parsed_date_from > parsed_date_to
+    ):
+        raise HTTPException(422, "date_from must be before or equal to date_to")
+
+    query = apply_metadata_filters(
+        query,
+        camera_make=camera_make,
+        camera_model=camera_model,
+        min_width=min_width,
+        min_height=min_height,
+        file_type=file_type,
+        date_from=parsed_date_from,
+        date_to=parsed_date_to,
+        orientation=orientation,
+    )
 
     # Apply date range filter if specified
     start_date, end_date = parse_date_range(date_range, date_start, date_end)
@@ -301,7 +451,11 @@ def get_gallery(
 
 
 @router.get("/image/{media_id}")
-def get_image_detail(media_id: int, db: Session = Depends(get_db)):
+def get_image_detail(
+    media_id: int,
+    db: Session = Depends(get_db),
+    user: Optional[User] = Depends(get_required_user),
+):
     """
     Get detailed information about a specific image
 
@@ -314,7 +468,7 @@ def get_image_detail(media_id: int, db: Session = Depends(get_db)):
     row = (
         db.query(Media, Cluster.label)
         .outerjoin(Cluster, Media.cluster_id == Cluster.id)
-        .filter(Media.id == media_id)
+        .filter(Media.id == media_id, Media.is_hidden.is_(False))
         .first()
     )
 
@@ -322,6 +476,8 @@ def get_image_detail(media_id: int, db: Session = Depends(get_db)):
         raise HTTPException(404, "Image not found")
 
     media, cluster_label = row
+    if not can_access_media(media, user):
+        raise HTTPException(404, "Image not found")
     metadata = normalize_metadata(media.metadata_json)
 
     # Build response
@@ -364,13 +520,17 @@ def get_image_detail(media_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/image/{media_id}/thumbnail")
-def get_image_thumbnail(media_id: int, db: Session = Depends(get_db)):
+def get_image_thumbnail(
+    media_id: int,
+    db: Session = Depends(get_db),
+    user: Optional[User] = Depends(get_required_user),
+):
     """
     Get a redirect to the image file for use as a thumbnail.
     Returns a redirect to the MinIO presigned URL.
     """
-    media = db.query(Media).filter(Media.id == media_id).first()
-    if not media:
+    media = _load_public_media_or_404(db, media_id)
+    if not can_access_media(media, user):
         raise HTTPException(404, "Image not found")
 
     object_key = media.thumbnail_key or media.minio_key
@@ -387,6 +547,7 @@ def get_image_thumbnail(media_id: int, db: Session = Depends(get_db)):
 def backfill_missing_thumbnails(
     limit: int = Query(100, ge=1, le=1000),
     db: Session = Depends(get_db),
+    user: Optional[User] = Depends(get_required_user),
 ):
     """
     Enqueue thumbnail-only jobs for existing images that do not have thumbnails.
@@ -396,8 +557,9 @@ def backfill_missing_thumbnails(
     clustering.
     """
     media_list = (
-        db.query(Media)
-        .filter(Media.thumbnail_key.is_(None))
+        scope_media_query(
+            _public_media_query(db).filter(Media.thumbnail_key.is_(None)), user
+        )
         .order_by(desc(Media.created_at))
         .limit(limit)
         .all()
@@ -422,13 +584,13 @@ def backfill_missing_thumbnails(
         )
         job_ids.append(job.id)
 
-    remaining = (
-        db.query(Media)
-        .filter(
-            Media.thumbnail_key.is_(None), Media.id.notin_([m.id for m in media_list])
-        )
-        .count()
-    )
+    remaining = scope_media_query(
+        _public_media_query(db).filter(
+            Media.thumbnail_key.is_(None),
+            Media.id.notin_([m.id for m in media_list]),
+        ),
+        user,
+    ).count()
 
     return {
         "queued": len(job_ids),
@@ -439,9 +601,13 @@ def backfill_missing_thumbnails(
 
 
 @router.post("/image/{media_id}/like")
-def toggle_like(media_id: int, db: Session = Depends(get_db)):
-    media = db.query(Media).filter(Media.id == media_id).first()
-    if not media:
+def toggle_like(
+    media_id: int,
+    db: Session = Depends(get_db),
+    user: Optional[User] = Depends(get_required_user),
+):
+    media = _load_public_media_or_404(db, media_id)
+    if not can_access_media(media, user):
         raise HTTPException(404, "Image not found")
 
     media.liked = not media.liked
@@ -453,7 +619,11 @@ def toggle_like(media_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/image/{media_id}/reprocess")
-def reprocess_image(media_id: int, db: Session = Depends(get_db)):
+def reprocess_image(
+    media_id: int,
+    db: Session = Depends(get_db),
+    user: Optional[User] = Depends(get_required_user),
+):
     """
     Reset a media record to pending and re-enqueue analysis.
 
@@ -462,8 +632,8 @@ def reprocess_image(media_id: int, db: Session = Depends(get_db)):
     - Images with status ``indexed`` that have incomplete metadata (no caption)
     - Images with status ``indexed`` that are missing a thumbnail
     """
-    media = db.query(Media).filter(Media.id == media_id).first()
-    if not media:
+    media = _load_public_media_or_404(db, media_id)
+    if not can_access_media(media, user):
         raise HTTPException(404, "Image not found")
 
     metadata = normalize_metadata(media.metadata_json)
@@ -544,9 +714,13 @@ def _delete_media_files(media: Media) -> None:
 
 
 @router.delete("/image/{media_id}")
-def delete_image(media_id: int, db: Session = Depends(get_db)):
-    media = db.query(Media).filter(Media.id == media_id).first()
-    if not media:
+def delete_image(
+    media_id: int,
+    db: Session = Depends(get_db),
+    user: Optional[User] = Depends(get_required_user),
+):
+    media = _load_public_media_or_404(db, media_id)
+    if not can_access_media(media, user):
         raise HTTPException(404, "Image not found")
 
     try:
@@ -569,9 +743,12 @@ def delete_image(media_id: int, db: Session = Depends(get_db)):
 def bulk_delete_images(
     request: BulkDeleteRequest,
     db: Session = Depends(get_db),
+    user: Optional[User] = Depends(get_required_user),
 ):
     requested_ids = list(dict.fromkeys(request.media_ids))
-    media_rows = db.query(Media).filter(Media.id.in_(requested_ids)).all()
+    media_rows = scope_media_query(
+        _public_media_query(db).filter(Media.id.in_(requested_ids)), user
+    ).all()
     media_by_id = {media.id: media for media in media_rows}
     missing_ids = [
         media_id for media_id in requested_ids if media_id not in media_by_id

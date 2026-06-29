@@ -26,7 +26,6 @@ def _seed(
         file_size=1024,
         status=status,
         liked=liked,
-        is_hidden=is_hidden,
         width=800,
         height=600,
         thumbnail_key=f"thumbnails/test/{filename}.webp",
@@ -35,6 +34,8 @@ def _seed(
         thumbnail_width=256,
         thumbnail_height=192,
         metadata_json=metadata_json,
+        is_hidden=is_hidden,
+        vault_state="hidden_encrypted" if is_hidden else "visible",
         created_at=datetime.now(timezone.utc),
     )
     db.add(media)
@@ -320,6 +321,33 @@ class TestGalleryFiltering:
         assert body["total"] == 5
         assert len(body["items"]) == 2
         assert body["skip"] == 2
+
+    def test_hidden_media_excluded_from_gallery_listing(self, client, db):
+        visible = _seed(db, filename="visible.jpg", status="indexed")
+        hidden = _seed(db, filename="hidden.jpg", status="indexed", is_hidden=True)
+
+        body = client.get("/api/gallery").json()
+        ids = [item["id"] for item in body["items"]]
+
+        assert visible.id in ids
+        assert hidden.id not in ids
+
+    def test_hidden_media_not_available_on_public_media_routes(self, client, db):
+        hidden = _seed(
+            db, filename="hidden-detail.jpg", status="indexed", is_hidden=True
+        )
+
+        detail_response = client.get(f"/api/image/{hidden.id}")
+        thumbnail_response = client.get(
+            f"/api/image/{hidden.id}/thumbnail", follow_redirects=False
+        )
+        like_response = client.post(f"/api/image/{hidden.id}/like")
+        reprocess_response = client.post(f"/api/image/{hidden.id}/reprocess")
+
+        assert detail_response.status_code == 404
+        assert thumbnail_response.status_code == 404
+        assert like_response.status_code == 404
+        assert reprocess_response.status_code == 404
 
 
 class TestDeleteImage:
@@ -692,3 +720,177 @@ class TestGalleryDateFiltering:
 
         body = client.get("/api/gallery").json()
         assert body["total"] == 2
+
+
+class TestGalleryMetadataFilters:
+    """Gallery filters using EXIF and image metadata."""
+
+    def test_gallery_filters_by_camera_make(self, client, db):
+        canon = _seed(db, filename="canon.jpg", status="indexed")
+        nikon = _seed(db, filename="nikon.jpg", status="indexed")
+        canon.exif_json = {"make": "Canon", "model": "EOS 80D"}
+        nikon.exif_json = {"make": "Nikon", "model": "D3500"}
+        db.commit()
+
+        response = client.get("/api/gallery", params={"camera_make": "Canon"})
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["total"] == 1
+        assert body["items"][0]["filename"] == "canon.jpg"
+
+    def test_gallery_filters_by_camera_model(self, client, db):
+        canon = _seed(db, filename="canon.jpg", status="indexed")
+        sony = _seed(db, filename="sony.jpg", status="indexed")
+        canon.exif_json = {"make": "Canon", "model": "EOS 80D"}
+        sony.exif_json = {"make": "Sony", "model": "Alpha 7"}
+        db.commit()
+
+        response = client.get("/api/gallery", params={"camera_model": "Alpha"})
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["total"] == 1
+        assert body["items"][0]["filename"] == "sony.jpg"
+
+    def test_gallery_filters_by_min_dimensions(self, client, db):
+        small = _seed(db, filename="small.jpg", status="indexed")
+        large = _seed(db, filename="large.jpg", status="indexed")
+        small.width = 640
+        small.height = 480
+        large.width = 3000
+        large.height = 2000
+        db.commit()
+
+        response = client.get(
+            "/api/gallery",
+            params={"min_width": 1000, "min_height": 1000},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["total"] == 1
+        assert body["items"][0]["filename"] == "large.jpg"
+
+    def test_gallery_filters_by_file_type(self, client, db):
+        jpg = _seed(db, filename="photo.jpg", status="indexed")
+        png = _seed(db, filename="graphic.png", status="indexed")
+        jpg.content_type = "image/jpeg"
+        png.content_type = "image/png"
+        db.commit()
+
+        response = client.get("/api/gallery", params={"file_type": "png"})
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["total"] == 1
+        assert body["items"][0]["filename"] == "graphic.png"
+
+    def test_gallery_filters_by_date_range(self, client, db):
+        older = _seed(db, filename="older.jpg", status="indexed")
+        newer = _seed(db, filename="newer.jpg", status="indexed")
+        older.created_at = datetime(2026, 1, 10, tzinfo=timezone.utc)
+        newer.created_at = datetime(2026, 2, 10, tzinfo=timezone.utc)
+        db.commit()
+
+        response = client.get(
+            "/api/gallery",
+            params={"date_from": "2026-02-01", "date_to": "2026-02-28"},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["total"] == 1
+        assert body["items"][0]["filename"] == "newer.jpg"
+
+    def test_gallery_date_to_includes_entire_date_only_day(self, client, db):
+        early = _seed(db, filename="early.jpg", status="indexed")
+        late = _seed(db, filename="late.jpg", status="indexed")
+        next_day = _seed(db, filename="next-day.jpg", status="indexed")
+        early.created_at = datetime(2026, 2, 28, 0, 5, tzinfo=timezone.utc)
+        late.created_at = datetime(2026, 2, 28, 23, 55, tzinfo=timezone.utc)
+        next_day.created_at = datetime(2026, 3, 1, 0, 1, tzinfo=timezone.utc)
+        db.commit()
+
+        response = client.get("/api/gallery", params={"date_to": "2026-02-28"})
+
+        assert response.status_code == 200
+        filenames = {item["filename"] for item in response.json()["items"]}
+        assert filenames == {"early.jpg", "late.jpg"}
+
+    def test_gallery_filters_by_orientation(self, client, db):
+        landscape = _seed(db, filename="landscape.jpg", status="indexed")
+        portrait = _seed(db, filename="portrait.jpg", status="indexed")
+        square = _seed(db, filename="square.jpg", status="indexed")
+        landscape.width = 1600
+        landscape.height = 900
+        portrait.width = 900
+        portrait.height = 1600
+        square.width = 1200
+        square.height = 1200
+        db.commit()
+
+        response = client.get("/api/gallery", params={"orientation": "portrait"})
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["total"] == 1
+        assert body["items"][0]["filename"] == "portrait.jpg"
+
+    def test_gallery_rejects_invalid_metadata_filter_values(self, client):
+        invalid_date = client.get("/api/gallery", params={"date_from": "not-a-date"})
+        invalid_range = client.get(
+            "/api/gallery",
+            params={"date_from": "2026-03-01", "date_to": "2026-02-01"},
+        )
+        invalid_orientation = client.get(
+            "/api/gallery",
+            params={"orientation": "diagonal"},
+        )
+
+        assert invalid_date.status_code == 422
+        assert invalid_range.status_code == 422
+        assert invalid_orientation.status_code == 422
+
+    def test_gallery_filter_excludes_missing_exif_data(self, client, db):
+        with_exif = _seed(db, filename="canon.jpg", status="indexed")
+        without_exif = _seed(db, filename="no-exif.jpg", status="indexed")
+        with_exif.exif_json = {"make": "Canon", "model": "EOS 80D"}
+        without_exif.exif_json = None
+        db.commit()
+
+        response = client.get("/api/gallery", params={"camera_make": "Canon"})
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["total"] == 1
+        assert body["items"][0]["filename"] == "canon.jpg"
+
+    def test_gallery_supports_combined_metadata_filters(self, client, db):
+        large_canon = _seed(db, filename="large-canon.jpg", status="indexed")
+        small_canon = _seed(db, filename="small-canon.jpg", status="indexed")
+        large_sony = _seed(db, filename="large-sony.jpg", status="indexed")
+
+        large_canon.exif_json = {"make": "Canon", "model": "EOS 80D"}
+        large_canon.width = 3000
+        large_canon.height = 2000
+
+        small_canon.exif_json = {"make": "Canon", "model": "EOS M50"}
+        small_canon.width = 640
+        small_canon.height = 480
+
+        large_sony.exif_json = {"make": "Sony", "model": "Alpha 7"}
+        large_sony.width = 3000
+        large_sony.height = 2000
+
+        db.commit()
+
+        response = client.get(
+            "/api/gallery",
+            params={"camera_make": "Canon", "min_width": 1000},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["total"] == 1
+        assert body["items"][0]["filename"] == "large-canon.jpg"
