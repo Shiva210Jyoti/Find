@@ -57,7 +57,7 @@ def test_storage_facade_initializes_backend_inside_worker_process(monkeypatch):
 
     def get_instance():
         if not initialized:
-            raise RuntimeError(
+            raise storage.StorageNotInitializedError(
                 "Storage backend not initialized. Call initialize_storage() first."
             )
         return backend

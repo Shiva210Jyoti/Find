@@ -9,7 +9,7 @@ from find_api.core.config import settings
 from find_api.core.storage_minio import MinIOStorageBackend
 
 
-def test_presigned_url_does_not_duplicate_bucket_path(monkeypatch):
+def test_presigned_url_does_not_repeat_public_endpoint_prefix(monkeypatch):
     monkeypatch.setattr(
         settings, "MINIO_PUBLIC_ENDPOINT", "http://localhost:9200/images"
     )

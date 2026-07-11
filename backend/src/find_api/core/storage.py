@@ -10,7 +10,10 @@ import asyncio
 import logging
 import threading
 
-from find_api.core.storage_factory import get_storage_instance
+from find_api.core.storage_factory import (
+    StorageNotInitializedError,
+    get_storage_instance,
+)
 from find_api.core.storage_thumbnails import (
     THUMBNAIL_CONTENT_TYPE,
     generate_thumbnail,
@@ -81,16 +84,13 @@ def _get_or_init_storage():
     """
     try:
         return get_storage_instance()
-    except RuntimeError as exc:
-        if "Storage backend not initialized" not in str(exc):
-            raise
+    except StorageNotInitializedError:
+        pass
 
     with _storage_init_lock:
         try:
             return get_storage_instance()
-        except RuntimeError as exc:
-            if "Storage backend not initialized" not in str(exc):
-                raise
+        except StorageNotInitializedError:
             init_storage()
             return get_storage_instance()
 
