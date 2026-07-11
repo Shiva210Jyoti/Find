@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import json
 from typing import Any
 
 from sqlalchemy import text
@@ -33,7 +34,9 @@ def find_near_duplicate(
         """
         ),
         {
-            "embedding": str(embedding),
+            # pgvector accepts JSON-style vectors. SQLAlchemy may return a NumPy
+            # array here, whose string form uses whitespace instead of commas.
+            "embedding": json.dumps([float(value) for value in embedding]),
             "media_id": media_id,
         },
     ).fetchone()
