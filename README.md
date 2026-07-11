@@ -32,7 +32,7 @@ See the documentation index in [`docs/index.md`](./docs/index.md), the mobile di
 - Inspect full-resolution images with zoom, keyboard navigation, and slideshow
 - Share albums with scoped links and optional passwords/download controls
 - Organize media with favorites, archive, recoverable trash, and near-duplicate review
-- Protect hidden images in an encrypted, passphrase-locked local vault
+- Protect hidden images in an encrypted local vault; full design alignment remains in progress
 - Record local feedback for search, captions, objects, and people grouping
 
 ## Tech stack
