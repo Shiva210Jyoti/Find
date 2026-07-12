@@ -220,6 +220,26 @@ def _get_zip_member_basename(member_name: str) -> str:
     return member_name.replace("\\", "/").split("/")[-1]
 
 
+def _verify_image_content(filename: str, file_data: bytes) -> None:
+    """Validate image bytes without mutating Pillow process-wide state."""
+    try:
+        with Image.open(io.BytesIO(file_data)) as img:
+            width, height = img.size
+            pixel_count = width * height
+            if pixel_count > settings.MAX_IMAGE_PIXELS:
+                raise HTTPException(
+                    400,
+                    f"File {filename} exceeds pixel limit ({pixel_count:,} > {settings.MAX_IMAGE_PIXELS:,})",
+                )
+            img.verify()
+    except HTTPException:
+        raise
+    except Image.DecompressionBombError:
+        raise HTTPException(400, f"File {filename} exceeds the safe pixel limit")
+    except Exception:
+        raise HTTPException(400, f"File {filename} is corrupted or not a valid image")
+
+
 def _ingest_image(
     *,
     filename: str,
@@ -234,18 +254,7 @@ def _ingest_image(
     if not detected_type.startswith("image/"):
         raise HTTPException(400, f"File {filename} is not an image")
 
-    # Verify image content and protect against decompression bombs
-    try:
-        # Set a reasonable limit for image pixels (e.g., 100MP)
-        Image.MAX_IMAGE_PIXELS = 100_000_000
-        with Image.open(io.BytesIO(file_data)) as img:
-            img.verify()
-            # Re-open to check dimensions (verify() consumes the file pointer)
-            # This is still lazy and doesn't decode pixels.
-            with Image.open(io.BytesIO(file_data)) as img2:
-                _ = img2.size
-    except Exception:
-        raise HTTPException(400, f"File {filename} is corrupted or not a valid image")
+    _verify_image_content(filename, file_data)
 
     file_size = len(file_data)
     max_size = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
