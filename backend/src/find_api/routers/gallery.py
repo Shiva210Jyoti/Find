@@ -24,7 +24,9 @@ from find_api.core.queue import get_task_queue
 from find_api.core.storage import get_file_url, delete_file
 from find_api.models.media import Media
 from find_api.models.cluster import Cluster
+from find_api.models.app_setting import AppSetting
 from find_api.models.user import User
+from find_api.routers.config import TRASH_RETENTION_DAYS_KEY
 from find_api.services.query_cache import invalidate_query_cache
 from find_api.workers.jobs import analyze_image, generate_thumbnail_for_media
 
@@ -578,6 +580,28 @@ def get_image_thumbnail(
     return RedirectResponse(url=url)
 
 
+@router.get("/image/{media_id}/original")
+def get_image_original(
+    media_id: int,
+    db: Session = Depends(get_db),
+    user: Optional[User] = Depends(get_required_user),
+):
+    """Return a scoped redirect to the original image object.
+
+    Viewer components need a media response rather than the JSON detail route.
+    Keeping this behind the same auth/IDOR checks also avoids exposing the
+    object-store key or making the bucket public.
+    """
+    media = _load_public_media_or_404(db, media_id)
+    if not can_access_media(media, user):
+        raise HTTPException(404, "Image not found")
+    try:
+        url = get_file_url(media.minio_key)
+    except Exception as exc:
+        raise HTTPException(500, "Could not generate image URL") from exc
+    return RedirectResponse(url=url)
+
+
 @router.post("/thumbnails/backfill")
 def backfill_missing_thumbnails(
     limit: int = Query(100, ge=1, le=1000),
@@ -757,6 +781,16 @@ def get_trash(
     user: Optional[User] = Depends(get_required_user),
 ):
     """List trashed assets (``deleted_at`` set), most recently trashed first."""
+    # Retention is enforced whenever Trash is opened, so the dashboard setting
+    # works without requiring an external cron service.
+    try:
+        purge_expired_trash(db=db, user=user)
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "Trash auto-purge failed; listing trash without purging",
+            exc_info=True,
+        )
+        db.rollback()
     query = scope_media_query(
         _public_media_query(db).filter(Media.deleted_at.isnot(None)),
         user,
@@ -829,7 +863,17 @@ def purge_expired_trash(
     than ``TRASH_RETENTION_DAYS`` are removed. Intended for a scheduled/manual
     auto-purge. Retention of 0 disables age-based purging (no-op).
     """
-    retention_days = settings.TRASH_RETENTION_DAYS
+    retention_setting = (
+        db.query(AppSetting).filter(AppSetting.key == TRASH_RETENTION_DAYS_KEY).first()
+    )
+    try:
+        retention_days = int(
+            retention_setting.value
+            if retention_setting is not None
+            else settings.TRASH_RETENTION_DAYS
+        )
+    except (TypeError, ValueError):
+        retention_days = settings.TRASH_RETENTION_DAYS
     if retention_days <= 0:
         return {
             "message": "Auto-purge disabled (TRASH_RETENTION_DAYS=0)",
